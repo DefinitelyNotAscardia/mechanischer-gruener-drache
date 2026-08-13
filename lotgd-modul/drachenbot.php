@@ -17,7 +17,7 @@
 function drachenbot_getmoduleinfo() {
 	$info = array(
 		"name" => "Drachenbot-Verknuepfung",
-		"version" => "0.2",
+		"version" => "0.3",
 		"author" => "Dominik Hellweg",
 		"category" => "Administrative",
 		"download" => "",
@@ -35,7 +35,11 @@ function drachenbot_getmoduleinfo() {
 }
 
 function drachenbot_install() {
-	module_addhook("village");
+	// Der Nav-Punkt haengt an der Einstellungsseite, nicht im Dorf (Wunsch der
+	// Betreiber): page_footer() feuert auf prefs.php den generischen Hook
+	// "footer-<scriptname>", und buildnavs() laeuft danach - ein addnav dort
+	// landet also noch in der Navigation der Seite.
+	module_addhook("footer-prefs");
 	return true;
 }
 
@@ -46,7 +50,7 @@ function drachenbot_uninstall() {
 }
 
 function drachenbot_dohook($hookname, $args) {
-	if ($hookname == "village") {
+	if ($hookname == "footer-prefs") {
 		addnav("Drachenbot (Discord)", "runmodule.php?module=drachenbot");
 	}
 	return $args;
@@ -211,7 +215,7 @@ function drachenbot_run() {
 	} else {
 		addnav("Token erzeugen", "runmodule.php?module=drachenbot&op=generate");
 	}
-	villagenav();
+	addnav("Zurueck zu den Einstellungen", "prefs.php");
 	page_footer();
 }
 ?>

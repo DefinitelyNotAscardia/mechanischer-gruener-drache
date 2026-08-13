@@ -23,7 +23,8 @@ ausgestelltes, widerrufbares Read-Only-Token** – genau das stellt dieses Modul
 
 ## Was es tut
 
-- **Für Spieler (eingeloggt):** Ein Navigationspunkt „Drachenbot (Discord)" im Dorf führt zu
+- **Für Spieler (eingeloggt):** Ein Navigationspunkt „Drachenbot (Discord)" auf der
+  Einstellungsseite (`prefs.php`, via Hook `footer-prefs`) führt zu
   einer Seite mit drei Aktionen: Token erzeugen, Token neu erzeugen (altes wird ungültig),
   Token widerrufen. Das Token wird **genau einmal** angezeigt; gespeichert wird nur sein
   sha256-Hash als Modul-Pref (`module_userprefs`). Komplett opt-in – wer nichts tut, für den
@@ -69,6 +70,12 @@ Jedes dieser Felder ist verhandelbar – sagt uns, was rausfliegen soll.
 2. Im Superuser-Bereich: Module verwalten → `drachenbot` installieren und aktivieren.
 
 Das ist alles. Keine DB-Migration, keine Konfiguration, keine weiteren Dateien.
+
+Wer noch eine Version vor 0.3 installiert hat: dort hing der Nav-Punkt im Dorf
+(Hook `village`). Die Hook-Registrierung steht in der Datenbank, ein reiner
+Datei-Austausch ändert sie nicht – das Modul deshalb einmal deinstallieren und
+neu installieren (die Token-Hashes fallen dabei weg, Spieler erzeugen also ein
+neues Token).
 
 ## Deinstallation
 
