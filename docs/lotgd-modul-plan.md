@@ -78,10 +78,15 @@ Moduldatei über den Standard-Mechanismus, nichts außerhalb von `modules/` wird
   Token-Auflösung (Hash → Account) braucht es die **Rückrichtung** – die gibt es als Helper
   nicht, also ein direkter `SELECT` auf `db_prefix("module_userprefs")` via `db_query()`
   (Escaping: `addslashes`, wie im Kern üblich; unser Suchwert ist ohnehin ein Hex-Hash).
-- Nav-Punkt für Spieler: Hook **`village`** (Standard-Muster, z.B. `outhouse.php`:
-  `addnav("...","runmodule.php?module=...")` im `_dohook`). Ein spezifischer Prefs-Seiten-Hook
-  existiert in 1.1.2 nicht – der Token-Punkt kommt also ins Dorf (oder `charstats`), nicht in
-  die Einstellungsseite; Detail beim Bauen entscheiden.
+- Nav-Punkt für Spieler: **`footer-prefs`** (seit Modul-Version 0.3, auf Wunsch der Betreiber –
+  vorher `village`, Standard-Muster wie `outhouse.php`). Einen *benannten* Prefs-Hook gibt es in
+  1.1.2 zwar nicht, aber `page_footer()` feuert generisch `footer-<scriptname>`
+  (`lib/pageparts.php`) – auf `prefs.php` also `footer-prefs`. Dass ein `addnav()` von dort noch
+  ankommt, liegt an der Reihenfolge in `page_footer()`: erst die Hooks, dann `buildnavs()`.
+  Der Rückweg aus der Modulseite ist entsprechend `addnav("Zurueck…","prefs.php")` statt
+  `villagenav()`. **Achtung beim Update:** die Hook-Registrierung liegt in `module_hooks` in der
+  DB, ein Datei-Austausch allein lässt den alten `village`-Eintrag stehen – Modul einmal de- und
+  neu installieren.
 - JSON-Ausgabe aus `_run()`: unproblematisch – das `ob_start()` in `common.php` ist bei
   Modul-Ausführung schon wieder geschlossen (`ob_end_clean()` ebenda); `header()` + `echo
   json_encode()` + `exit` im `op=api`-Zweig, bevor `page_header()` je aufgerufen wird.

@@ -1,4 +1,4 @@
-import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
+import {describe, it, expect, vi, beforeEach} from 'vitest';
 import {MessageFlags} from 'discord.js';
 
 vi.mock("../services/redis.service.js", () => ({
@@ -51,6 +51,7 @@ import pingPongHandler, {
     entscheideTaktik,
     formatAnsage,
     formatSerie,
+    MIN_SERIE,
     randomDuellFlavor,
     spieleDuell,
     TAKTIK_AKTIONEN
@@ -430,6 +431,93 @@ describe('PingPongHandler', () => {
             await pingPongHandler.verarbeiteSerie('user-a', 'user-b');
 
             expect(redisService.delete).not.toHaveBeenCalled();
+        });
+
+        it('schreibt den neuen Rekord auch in die Rangliste', async () => {
+            vi.mocked(redisService.increment).mockResolvedValue(4);
+            vi.mocked(redisService.get).mockImplementation(async (key: string) =>
+                key === 'PING_PONG:REKORD:user-a' ? '2' : null);
+
+            await pingPongHandler.verarbeiteSerie('user-a', 'user-b');
+
+            expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG:REKORD_HIGHSCORE', 'user-a', 4);
+        });
+
+        // Der Kern der lazy Nachwanderung: das Sorted Set kam nach den Einzelkeys dazu, deshalb
+        // wird auch OHNE neuen Rekord der bestehende Wert hineingeschrieben. Ohne das müsste man
+        // die Bestandsrekorde per SCAN migrieren - oder sie blieben für immer unsichtbar.
+        it('schreibt auch ohne neuen Rekord den bestehenden Stand in die Rangliste', async () => {
+            vi.mocked(redisService.increment).mockResolvedValue(2);
+            vi.mocked(redisService.get).mockImplementation(async (key: string) =>
+                key === 'PING_PONG:REKORD:user-a' ? '9' : null);
+
+            await pingPongHandler.verarbeiteSerie('user-a', 'user-b');
+
+            expect(redisService.set).not.toHaveBeenCalledWith('PING_PONG:REKORD:user-a', expect.anything());
+            expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG:REKORD_HIGHSCORE', 'user-a', 9);
+        });
+    });
+
+    describe('handleSerienrekorde', () => {
+        const interaction = () => ({reply: vi.fn(), guild: {}} as any);
+
+        it('listet die Rekorde absteigend mit Emoji und ohne Mentions', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([
+                {value: 'user-a', score: 7},
+                {value: 'user-b', score: 4},
+            ] as any);
+            vi.mocked(userService.getUser).mockImplementation(async (id: string) =>
+                ({displayName: id === 'user-a' ? 'Tirsis' : 'Acaine'} as any));
+
+            const inter = interaction();
+            await pingPongHandler.handleSerienrekorde(inter);
+
+            const antwort = inter.reply.mock.calls[0][0];
+            expect(antwort.content).toContain('1. 🌞 Tirsis - **7** Siege in Folge');
+            expect(antwort.content).toContain('2. 🌞 Acaine - **4** Siege in Folge');
+            // Pflicht: der displayName ist selbst gewählt, ein `<@…>` darin würde sonst pingen.
+            expect(antwort.allowedMentions).toEqual({parse: []});
+        });
+
+        // Eine "Serie" von 1 hat jede Person mit einem einzigen Sieg - das wären dieselben
+        // Karteileichen wie die 0-Punkte-Einträge in der Bestenliste.
+        // Die Grenze ist EINSCHLIESSEND (>= MIN_SERIE): eine Serie von genau 2 gehört in die
+        // Liste, nur die 1 fliegt raus. Der Leer-Text sagt das auch so ("mindestens 2") - er
+        // behauptete zwischenzeitlich "über 2" und war damit um eins daneben.
+        it('nimmt eine Serie von genau der Mindestlänge auf und lässt nur kürzere weg', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([
+                {value: 'user-a', score: MIN_SERIE},
+                {value: 'user-b', score: MIN_SERIE - 1},
+            ] as any);
+            vi.mocked(userService.getUser).mockResolvedValue({displayName: 'Tirsis'} as any);
+
+            const inter = interaction();
+            await pingPongHandler.handleSerienrekorde(inter);
+
+            const content = inter.reply.mock.calls[0][0].content;
+            expect(content).toContain(`1. 🌞 Tirsis - **${MIN_SERIE}** Siege in Folge`);
+            expect(content).not.toContain('2.');
+        });
+
+        it('meldet eine leere Rangliste, statt eine leere Liste zu posten', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([{value: 'user-a', score: 1}] as any);
+
+            const inter = interaction();
+            await pingPongHandler.handleSerienrekorde(inter);
+
+            expect(inter.reply.mock.calls[0][0].content).toContain('Noch keine Serie');
+        });
+
+        it('antwortet ephemer, wenn der Abruf scheitert', async () => {
+            vi.mocked(redisService.getSortedSet).mockRejectedValue(new Error('Redis weg'));
+
+            const inter = interaction();
+            await pingPongHandler.handleSerienrekorde(inter);
+
+            expect(inter.reply).toHaveBeenCalledWith({
+                content: 'Die Serienrekorde konnten nicht abgerufen werden.',
+                flags: MessageFlags.Ephemeral,
+            });
         });
     });
 
