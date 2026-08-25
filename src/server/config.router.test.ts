@@ -63,7 +63,15 @@ vi.mock('./config.settings.js', () => ({
     addiereLegacyKilometer: vi.fn(() => Promise.resolve()),
     setzeLegacyKilometer: vi.fn(() => Promise.resolve()),
     holeMeilensteine: vi.fn(() => Promise.resolve([{kilometers: 1000, text: 'Tausend!', announced: true}])),
-    entferneMeilenstein: vi.fn(() => Promise.resolve())
+    entferneMeilenstein: vi.fn(() => Promise.resolve()),
+    anzahlBashZitate: vi.fn(async () => 2),
+    holeBashZitate: vi.fn(async () => [{
+        nummer: 7, text: 'Ich bin ein Zitat', person: 'Tirsis', ersteller: 'Enzlor',
+        kontext: '#plauderei', datum: '2026-03-12',
+        quelleUrl: 'https://discord.com/channels/g1/c1/m1',
+    }]),
+    speichereBashZitat: vi.fn(async () => true),
+    entferneBashZitat: vi.fn(async () => undefined)
 }));
 
 import client from '../client.js';
@@ -85,6 +93,8 @@ import {
     handleMorgengrussEmojiSpeichern,
     handleMorgengrussLernen,
     handleRolleSpeichern,
+    handleBashSeite,
+    handleBashSpeichern,
     handleSportSpeichern,
     parseIsoDateTime,
     leseMeldung,
@@ -92,6 +102,8 @@ import {
     renderEventFormular,
     renderKanalFormular,
     renderLogs,
+    renderBashLink,
+    renderBashListe,
     renderMeilensteinListe,
     renderMorgengrussEmojiLink,
     renderMorgengrussEmojis,
@@ -1037,6 +1049,7 @@ describe('config.router', () => {
         legacyKilometer: 1250,
         meilensteine: [{kilometers: 1000, text: 'Tausend!', announced: false}],
         anzahlEmojiEintraege: 3,
+        anzahlZitate: 2,
         csrfToken: 'tok',
     });
 
@@ -1261,5 +1274,156 @@ describe('config.router', () => {
         expect(cookie).toContain(`${SESSION_COOKIE}=`);
         expect(cookie).toContain('Max-Age=0');
         expect(res.redirect).toHaveBeenCalledWith('/config');
+    });
+});
+
+describe('Zitatsammlung auf /config', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        setGuildMember(adminMember);
+    });
+
+    it('verlinkt die ausgelagerte Liste aus dem eigenen Bereich, statt sie einzubetten', async () => {
+        const res = mockResponse();
+        res.locals.configUserId = '12345';
+
+        await handleConfigPage(mockRequest(), res);
+
+        const html = res.send.mock.calls[0][0] as string;
+        expect(html).toContain('href="/config/bash"');
+        expect(html).toContain('bereich-bash');
+        // Die Hauptseite laedt nur die Anzahl, nicht die Zitate selbst.
+        expect(settings.anzahlBashZitate).toHaveBeenCalled();
+        expect(settings.holeBashZitate).not.toHaveBeenCalled();
+    });
+
+    it('renderBashLink nennt die Anzahl im richtigen Numerus', () => {
+        expect(renderBashLink(1)).toContain('1 Zitat');
+        expect(renderBashLink(4)).toContain('4 Zitate');
+    });
+
+    it('renderBashListe zeigt je Zitat ein Formular samt Herkunftslink', () => {
+        const html = renderBashListe([{
+            nummer: 7, text: 'Ein Spruch', person: 'Tirsis', ersteller: 'Enzlor',
+            kontext: '#plauderei', datum: '2026-03-12',
+            quelleUrl: 'https://discord.com/channels/g1/c1/m1',
+        }], 'token');
+
+        expect(html).toContain('#7');
+        expect(html).toContain('name="nummer" value="7"');
+        expect(html).toContain('value="speichern"');
+        expect(html).toContain('value="entfernen"');
+        expect(html).toContain('https://discord.com/channels/g1/c1/m1');
+    });
+
+    // Zitattext ist Fremdtext - ohne Escaping waere die Uebersicht ein XSS-Vektor.
+    it('renderBashListe escaped den Wortlaut', () => {
+        const html = renderBashListe([{
+            nummer: 1, text: '<script>alert(1)</script>', person: '<b>x</b>', ersteller: '',
+            kontext: '', datum: '', quelleUrl: null,
+        }], 'token');
+
+        expect(html).not.toContain('<script>alert(1)</script>');
+        expect(html).toContain('&lt;script&gt;');
+    });
+
+    it('handleBashSeite rendert die Liste und den Rueckweg', async () => {
+        const res = mockResponse();
+        res.locals.configUserId = '12345';
+
+        await handleBashSeite(mockRequest(), res);
+
+        const html = res.send.mock.calls[0][0] as string;
+        expect(html).toContain('Zitatsammlung');
+        expect(html).toContain('action="/config/bash"');
+        expect(html).toContain('href="/config"');
+        expect(html).not.toContain('Zitat gespeichert.');
+    });
+
+    it('handleBashSeite bleibt bei einem Redis-Fehler bedienbar', async () => {
+        (settings.holeBashZitate as any).mockRejectedValueOnce(new Error('Redis weg'));
+        const res = mockResponse();
+        res.locals.configUserId = '12345';
+
+        await handleBashSeite(mockRequest(), res);
+
+        expect(res.send.mock.calls[0][0]).toContain('konnten gerade nicht geladen werden');
+    });
+
+    describe('handleBashSpeichern', () => {
+        const anfrage = (body: Record<string, string>) => mockRequest({body});
+
+        it('lehnt ein fehlendes CSRF-Token ab, ohne zu speichern', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleBashSpeichern(anfrage({nummer: '7', aktion: 'speichern', text: 'x'}), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(settings.speichereBashZitat).not.toHaveBeenCalled();
+        });
+
+        it('speichert Wortlaut, Kontext und Datum und leitet zurueck', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleBashSpeichern(anfrage({
+                _csrf: createCsrfToken('12345'), nummer: '7', aktion: 'speichern',
+                text: 'Neuer Wortlaut', kontext: 'Sprachkanal', datum: '2026-03-12',
+            }), res);
+
+            expect(settings.speichereBashZitat).toHaveBeenCalledWith(7, 'Neuer Wortlaut', 'Sprachkanal', '2026-03-12');
+            expect(res.redirect).toHaveBeenCalledWith('/config/bash?gespeichert=1');
+        });
+
+        it('entfernt ein Zitat', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleBashSpeichern(anfrage({
+                _csrf: createCsrfToken('12345'), nummer: '7', aktion: 'entfernen',
+            }), res);
+
+            expect(settings.entferneBashZitat).toHaveBeenCalledWith(7);
+            expect(res.redirect).toHaveBeenCalledWith('/config/bash?entfernt=1');
+        });
+
+        it('lehnt eine unbrauchbare Nummer ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleBashSpeichern(anfrage({
+                _csrf: createCsrfToken('12345'), nummer: 'sieben', aktion: 'speichern', text: 'x',
+            }), res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereBashZitat).not.toHaveBeenCalled();
+        });
+
+        it('lehnt eine unbekannte Aktion ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleBashSpeichern(anfrage({
+                _csrf: createCsrfToken('12345'), nummer: '7', aktion: 'loeschen-alles',
+            }), res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+        });
+
+        // speichereBashZitat prueft Wortlaut und Datum selbst; false darf nicht als Erfolg
+        // durchgehen, sonst meldet die Seite "gespeichert", ohne dass sich etwas geaendert hat.
+        it('meldet einen Fehler, wenn das Speichern abgelehnt wurde', async () => {
+            (settings.speichereBashZitat as any).mockResolvedValueOnce(false);
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleBashSpeichern(anfrage({
+                _csrf: createCsrfToken('12345'), nummer: '7', aktion: 'speichern', text: '   ',
+            }), res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.redirect).not.toHaveBeenCalled();
+        });
     });
 });

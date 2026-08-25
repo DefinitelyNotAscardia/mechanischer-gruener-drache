@@ -27,11 +27,15 @@ import {
 import {SportMilestone} from '../types/sport.js';
 import {
     addiereLegacyKilometer,
+    anzahlBashZitate,
+    BashZitatAnzeige,
     deuteEmojiEingabe,
+    entferneBashZitat,
     entferneEvent,
     entferneMeilenstein,
     EventFelder,
     FeldStatus,
+    holeBashZitate,
     holeEmojiVorschlaege,
     holeEventFelder,
     holeLegacyKilometer,
@@ -55,6 +59,7 @@ import {
     RollenFeld,
     RollenOption,
     setzeLegacyKilometer,
+    speichereBashZitat,
     speichereEventDaten,
     speichereKanal,
     speichereKilometer,
@@ -123,6 +128,14 @@ export function renderPage(bodyHtml: string): string {
         li.meilenstein { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(128,128,128,0.2); }
         li.meilenstein form { margin: 0; }
         li.meilenstein button { padding: 0.2rem 0.7rem; }
+        ul.zitate { list-style: none; padding: 0; margin: 0.3rem 0; }
+        li.zitat { padding: 0.6rem 0; border-bottom: 1px solid rgba(128,128,128,0.25); }
+        li.zitat .kopf { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; font-size: 0.9rem; }
+        li.zitat .nummer { font-weight: 600; font-size: 1rem; }
+        li.zitat textarea { width: 100%; box-sizing: border-box; padding: 0.3rem; font: inherit; margin: 0.3rem 0; }
+        li.zitat .felder { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+        li.zitat .felder input[type="text"] { flex: 1; min-width: 8rem; padding: 0.3rem; }
+        li.zitat form { margin: 0; }
         table.emojis { border-collapse: collapse; margin: 0.5rem 0 0; font-size: 0.95rem; }
         table.emojis th, table.emojis td { text-align: left; padding: 0.3rem 1rem 0.3rem 0; border-bottom: 1px solid rgba(128,128,128,0.25); }
         table.emojis th { font-weight: 600; }
@@ -443,6 +456,70 @@ export function renderMorgengrussEmojiSeite(
     <p><a href="/config">Zurück zu den Einstellungen</a></p>`;
 }
 
+// Zitatsammlung: Link auf die ausgelagerte Übersicht. Wie bei den Morgengruß-Emojis liegt die
+// eigentliche Liste auf einer Unterseite - sie wächst mit jedem Zitat und würde /config sonst
+// dominieren; die Hauptseite lädt dafür nur die Anzahl.
+export function renderBashLink(anzahl: number): string {
+    return `<p class="feld-hinweis"><a href="/config/bash">Alle Zitate ansehen, bearbeiten und entfernen</a>
+    (${Number(anzahl)} ${anzahl === 1 ? 'Zitat' : 'Zitate'})</p>`;
+}
+
+export function renderBashHinweis(): string {
+    return `<p class="feld-hinweis">Festgehalten wird per Rechtsklick auf eine Nachricht → Apps →
+    „Als Bash-Zitat speichern" (mobil: gedrückt halten). Abgerufen mit <code>/bash zitat</code>.
+    Nummern werden nach dem Entfernen <strong>nicht neu vergeben</strong>, damit ältere Verweise
+    nicht plötzlich etwas anderes zeigen.</p>`;
+}
+
+// Ein Bearbeiten-Formular je Zitat plus Entfernen-Button. Der Wortlaut steht in einem <textarea>,
+// weil Zitate mehrzeilig sein dürfen (Dialoge). Das Datum als natives <input type="date"> - so
+// kommt hier nur ISO an und die Prüfung in speichereBashZitat hat es leicht.
+export function renderBashListe(zitate: BashZitatAnzeige[], csrfToken: string): string {
+    if (!zitate.length) {
+        return '<p class="status-leer">Noch keine Zitate gespeichert.</p>';
+    }
+    const zeilen = zitate.map(zitat => {
+        const herkunft = zitat.quelleUrl
+            ? `<a href="${escapeHtml(zitat.quelleUrl)}" rel="noreferrer">Originalnachricht</a>`
+            : '<span class="status-leer">ohne Herkunft</span>';
+        const ersteller = zitat.ersteller ? `festgehalten von ${escapeHtml(zitat.ersteller)}` : '';
+        return `<li class="zitat">
+        <div class="kopf">
+            <span class="nummer">#${Number(zitat.nummer)}</span>
+            <span>${escapeHtml(zitat.person)}</span>
+            <span>${herkunft}</span>
+            <span class="status-leer">${ersteller}</span>
+        </div>
+        <form method="post" action="/config/bash">
+            <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+            <input type="hidden" name="nummer" value="${Number(zitat.nummer)}">
+            <textarea name="text" rows="3" required maxlength="1500"
+                      aria-label="Wortlaut von Zitat ${Number(zitat.nummer)}">${escapeHtml(zitat.text)}</textarea>
+            <div class="felder">
+                <input type="text" name="kontext" value="${escapeHtml(zitat.kontext)}" maxlength="100"
+                       placeholder="Ort/Kontext" aria-label="Ort/Kontext von Zitat ${Number(zitat.nummer)}">
+                <input type="date" name="datum" value="${escapeHtml(zitat.datum)}"
+                       aria-label="Datum von Zitat ${Number(zitat.nummer)}">
+                <button type="submit" name="aktion" value="speichern">Speichern</button>
+                <button type="submit" name="aktion" value="entfernen" formnovalidate
+                        onclick="return confirm('Zitat #${Number(zitat.nummer)} wirklich entfernen? Der Wortlaut ist danach weg, die Nummer bleibt frei.')">Entfernen</button>
+            </div>
+        </form>
+    </li>`;
+    }).join('\n');
+    return `<ul class="zitate">${zeilen}</ul>`;
+}
+
+// Die ausgelagerte Seite - reine Präsentation wie renderConfigSeite, damit sie sich ohne Deploy
+// in der Vorschau bauen lässt.
+export function renderBashSeite(zitate: BashZitatAnzeige[], csrfToken: string, meldung?: string): string {
+    return `<h1>Zitatsammlung</h1>
+    ${renderBashHinweis()}
+    ${meldung ? `<p class="meldung status-ok">${escapeHtml(meldung)}</p>` : ''}
+    ${renderBashListe(zitate, csrfToken)}
+    <p><a href="/config">Zurück zu den Einstellungen</a></p>`;
+}
+
 // Morgengruß: Button, der den Historien-Scan für die persönlichen Emojis anstößt (früher
 // /morgengruss lernen). Der Kanal wird oben im selben Bereich gesetzt; ist keiner da, meldet das der
 // Handler nach dem Klick. Der Scan kostet ein paar API-Calls, die POST-Antwort blockt so lange.
@@ -549,6 +626,8 @@ export interface ConfigSeiteDaten {
     // Nur die Anzahl für den Link - die Tabelle selbst liegt auf /config/morgengruss-emojis.
     // Dadurch braucht die Hauptseite die Emoji-Daten gar nicht mehr zu laden.
     anzahlEmojiEintraege: number;
+    // Ebenfalls nur die Anzahl - die Zitate selbst liegen auf /config/bash.
+    anzahlZitate: number;
     csrfToken: string;
     meldung?: Meldung;
 }
@@ -605,6 +684,9 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
         renderBereich('pingpong', 'Ping-Pong',
             rolle('pingpong-champion') + renderPingPongHinweis(),
             meldungFuer('pingpong')) +
+        renderBereich('bash', 'Zitatsammlung',
+            renderBashLink(daten.anzahlZitate) + renderBashHinweis(),
+            meldungFuer('bash')) +
         renderBereich('event', 'Event',
             renderEventFormular(daten.eventFelder, csrf),
             meldungFuer('event'));
@@ -745,13 +827,14 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
         const userId = res.locals.configUserId as string;
         // Parallel: die Abfragen hängen nicht voneinander ab, und jede ist mindestens ein
         // Redis-Roundtrip (ladeKanalFelder zusätzlich vier channels.fetch).
-        const [kanalFelder, rollenFelder, eventFelder, mitglieder, legacyKilometer, meilensteine] = await Promise.all([
+        const [kanalFelder, rollenFelder, eventFelder, mitglieder, legacyKilometer, meilensteine, anzahlZitate] = await Promise.all([
             ladeKanalFelder(),
             ladeRollenFelder(),
             holeEventFelder(),
             holeMitglieder(),
             holeLegacyKilometer(),
             holeMeilensteine(),
+            anzahlBashZitate(),
         ]);
         const html = renderConfigSeite({
             kanalFelder,
@@ -763,6 +846,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             legacyKilometer,
             meilensteine,
             anzahlEmojiEintraege: mitglieder.length,
+            anzahlZitate,
             csrfToken: createCsrfToken(userId),
             meldung: leseMeldung(req),
         });
@@ -972,6 +1056,71 @@ export async function handleMorgengrussEmojiSpeichern(req: Request, res: Respons
     res.redirect('/config/morgengruss-emojis?gespeichert=1');
 }
 
+// Eigene Seite für die Zitatsammlung (ausgelagert wie die Emoji-Übersicht - die Liste wächst).
+export async function handleBashSeite(req: Request, res: Response): Promise<void> {
+    try {
+        const userId = res.locals.configUserId as string;
+        const zitate = await holeBashZitate();
+        const meldung = req.query.gespeichert === '1'
+            ? 'Zitat gespeichert.'
+            : req.query.entfernt === '1' ? 'Zitat entfernt.' : undefined;
+        res.type('html').send(renderPage(renderBashSeite(zitate, createCsrfToken(userId), meldung)));
+    } catch (error) {
+        console.error('Fehler beim Laden der Zitatsammlung:', error);
+        res.type('html').send(renderPage(
+            '<h1>Zitatsammlung</h1><p>Die Zitate konnten gerade nicht geladen werden.</p>' +
+            '<p><a href="/config">Zurück zu den Einstellungen</a></p>'
+        ));
+    }
+}
+
+// Bearbeiten/Entfernen eines Zitats. Reihenfolge wie überall: CSRF → Nummer prüfen → Aktion.
+// Zwei Aktionen in einem Formular über name="aktion" (Muster wie beim Event-Formular); der
+// Entfernen-Button ist formnovalidate, damit er trotz required-Textfeld abschickbar bleibt.
+export async function handleBashSpeichern(req: Request, res: Response): Promise<void> {
+    const userId = res.locals.configUserId as string;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const token = typeof body._csrf === 'string' ? body._csrf : undefined;
+
+    if (!verifyCsrfToken(userId, token)) {
+        res.status(403).type('html').send(renderPage(forbiddenBody('Ungültiges oder fehlendes CSRF-Token.')));
+        return;
+    }
+
+    const nummer = Number(typeof body.nummer === 'string' ? body.nummer : NaN);
+    if (!Number.isInteger(nummer) || nummer < 1) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Ungültige Zitat-Nummer.')));
+        return;
+    }
+
+    const aktion = typeof body.aktion === 'string' ? body.aktion : '';
+    if (aktion === 'entfernen') {
+        await entferneBashZitat(nummer);
+        res.redirect('/config/bash?entfernt=1');
+        return;
+    }
+    if (aktion !== 'speichern') {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Aktion.')));
+        return;
+    }
+
+    // speichereBashZitat prüft Wortlaut und Datum selbst und meldet false, statt etwas Kaputtes
+    // zu schreiben; false kommt auch, wenn die Nummer zwischenzeitlich entfernt wurde.
+    const gespeichert = await speichereBashZitat(
+        nummer,
+        typeof body.text === 'string' ? body.text : '',
+        typeof body.kontext === 'string' ? body.kontext : '',
+        typeof body.datum === 'string' ? body.datum : ''
+    );
+    if (!gespeichert) {
+        res.status(400).type('html').send(renderPage(forbiddenBody(
+            'Das Zitat konnte nicht gespeichert werden – leerer Wortlaut, unlesbares Datum oder die Nummer gibt es nicht mehr.'
+        )));
+        return;
+    }
+    res.redirect('/config/bash?gespeichert=1');
+}
+
 // Morgengruß: stößt den Historien-Scan an (früher /morgengruss lernen). CSRF zuerst, dann scannen -
 // der Scan (greetingHandler.lerneAusHistorie) löst den Kanal selbst auf und liefert null, wenn keiner
 // gesetzt/abrufbar ist. Ergebnis per Redirect (PRG), damit ein Reload nicht erneut scannt.
@@ -1121,6 +1270,7 @@ postRoute('/config/event', handleEventSpeichern, 'Fehler beim Speichern des Even
 postRoute('/config/sport', handleSportSpeichern, 'Fehler beim Speichern der Sport-Einstellung');
 postRoute('/config/morgengruss', handleMorgengrussLernen, 'Fehler beim Morgengruß-Lernen', 'Lernen fehlgeschlagen.');
 postRoute('/config/morgengruss-emoji', handleMorgengrussEmojiSpeichern, 'Fehler beim Speichern des Morgengruß-Emojis');
+postRoute('/config/bash', handleBashSpeichern, 'Fehler beim Speichern des Zitats');
 
 configRouter.get('/config/login', handleLogin);
 configRouter.get('/config/callback',
@@ -1129,6 +1279,8 @@ configRouter.get('/config/callback',
 configRouter.get('/config/logs', geschuetzt, handleLogs);
 configRouter.get('/config/morgengruss-emojis', geschuetzt,
     fangeFehler(handleMorgengrussEmojiSeite, 'Fehler beim Rendern der Morgengruß-Emoji-Seite', 'Interner Fehler.'));
+configRouter.get('/config/bash', geschuetzt,
+    fangeFehler(handleBashSeite, 'Fehler beim Rendern der Zitat-Seite', 'Interner Fehler.'));
 // POST statt GET (seit 2026-07-28): ein GET-Logout war per <img src=".../config/logout"> von
 // fremden Seiten ausloesbar (nur ein Aergernis, aber alle anderen Aktionen sind sauber POST).
 // Bewusst ohne Auth/CSRF: Abmelden loescht nur das eigene Cookie, ist idempotent und muss auch

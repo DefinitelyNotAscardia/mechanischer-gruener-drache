@@ -9,3 +9,4 @@ config.json
 *.log
 config-vorschau.html
 config-vorschau-emojis.html
+config-vorschau-bash.html

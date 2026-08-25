@@ -11,6 +11,7 @@ import geburtstagService from '../services/geburtstag.service.js';
 import drachenService from '../services/drachen.service.js';
 import eventService from '../services/event.service.js';
 import pingPongService from '../services/pingPong.service.js';
+import bashService, {BashAenderung, parseIsoDatum} from '../services/bash.service.js';
 import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
 import {EMOJI_SHORTCODES} from '../data/emoji-shortcodes.js';
 
@@ -487,4 +488,60 @@ export async function holeMorgengrussEmojis(): Promise<MorgengrussEintrag[]> {
 
 export async function entferneMeilenstein(kilometer: number): Promise<void> {
     await sportService.removeMilestone(kilometer);
+}
+
+// --- Zitatsammlung (Bash) ---------------------------------------------------------------------
+// Die Übersicht ist bewusst NUR hier (kein /bash liste in Discord): eine mit der Zeit wachsende
+// Liste braucht Blättern, und zum Redigieren gibt es in Discord keine brauchbaren Formulare.
+
+export interface BashZitatAnzeige {
+    nummer: number;
+    text: string;
+    // Aufgelöste Anzeigenamen statt roher IDs - eine Tabelle voller Zahlen wäre nicht prüfbar.
+    // Fällt auf die ID zurück, wenn die Person nicht (mehr) auf dem Server ist.
+    person: string;
+    ersteller: string;
+    kontext: string;
+    datum: string;   // 'YYYY-MM-DD' fürs <input type="date">, '' wenn keins hinterlegt
+    // Sprunglink zur Originalnachricht ("stimmt das so?"). null bei Zitaten ohne Herkunft.
+    quelleUrl: string | null;
+}
+
+function nameFuer(userId: string): string {
+    return guildMitglieder().find(member => member.id === userId)?.name ?? userId;
+}
+
+export async function holeBashZitate(): Promise<BashZitatAnzeige[]> {
+    const zitate = await bashService.holeAlle();
+    return zitate.map(zitat => ({
+        nummer: zitat.nummer,
+        text: zitat.text,
+        person: nameFuer(zitat.personId),
+        ersteller: zitat.erstellerId ? nameFuer(zitat.erstellerId) : '',
+        kontext: zitat.kontext ?? '',
+        datum: zitat.datum ?? '',
+        quelleUrl: zitat.quelle
+            ? `https://discord.com/channels/${config.GUILD_ID}/${zitat.quelle.channelId}/${zitat.quelle.messageId}`
+            : null,
+    }));
+}
+
+export async function anzahlBashZitate(): Promise<number> {
+    return bashService.anzahl();
+}
+
+// Nimmt die Rohwerte aus dem Formular und prüft das Datum, bevor gespeichert wird. false heißt
+// "abgelehnt" (leerer Text oder unlesbares Datum) - der Router antwortet dann mit 400, statt still
+// etwas Kaputtes zu schreiben. Person/Ersteller/Herkunft bleiben unangetastet (siehe BashAenderung).
+export async function speichereBashZitat(nummer: number, text: string, kontext: string, datum: string): Promise<boolean> {
+    const geprueft = parseIsoDatum(datum);
+    if (!text.trim() || !geprueft.ok) {
+        return false;
+    }
+    const aenderung: BashAenderung = {text: text.trim(), kontext: kontext.trim() || null, datum: geprueft.wert};
+    return (await bashService.aktualisiere(nummer, aenderung)) !== null;
+}
+
+export async function entferneBashZitat(nummer: number): Promise<void> {
+    await bashService.entferne(nummer);
 }

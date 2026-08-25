@@ -16,6 +16,7 @@ import rollenspiel from "./rollenspiel.command.js";
 import anstupser from "./anstupser.command.js";
 import geburtstag from "./geburtstag.command.js";
 import beobachten from "./beobachten.command.js";
+import bash from "./bash.command.js";
 
 export default [
     ping,
@@ -35,5 +36,6 @@ export default [
     rollenspiel,
     anstupser,
     geburtstag,
-    beobachten
+    beobachten,
+    bash
 ];

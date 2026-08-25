@@ -3,7 +3,7 @@ import path from 'path';
 // Import aus dem gebauten dist/ (declaration: true -> voll typisiert). Dev-Werkzeug: rendert die
 // /config-Seite mit Beispieldaten in eine HTML-Datei, damit man am Layout iterieren kann, ohne den
 // Bot zu deployen. Nutzt die ECHTEN Render-Funktionen + das echte CSS -> keine Drift zur Live-Seite.
-import {renderConfigSeite, renderMorgengrussEmojiSeite, renderPage} from '../dist/server/config.router.js';
+import {renderBashSeite, renderConfigSeite, renderMorgengrussEmojiSeite, renderPage} from '../dist/server/config.router.js';
 
 // Absichtlich alle drei Feld-Zustände dabei (ok / leer / warnung), damit die Vorschau zeigt, wie ein
 // nicht gesetztes bzw. ein auf einen gelöschten Kanal zeigendes Feld aussieht.
@@ -43,6 +43,7 @@ const html = renderConfigSeite({
         {kilometers: 2000, text: 'Auf zur nächsten Etappe – 2000 km!', announced: false},
     ],
     anzahlEmojiEintraege: 4,
+    anzahlZitate: 3,
     csrfToken: 'vorschau-token',
     meldung: {bereich: 'sport', text: 'Kilometerstand gesetzt.', art: 'ok'},
 });
@@ -68,3 +69,25 @@ const emojiSeite = renderPage(renderMorgengrussEmojiSeite(
 const emojiZiel = path.join(process.cwd(), 'config-vorschau-emojis.html');
 writeFileSync(emojiZiel, emojiSeite, 'utf-8');
 console.log(`Vorschau geschrieben: ${emojiZiel}`);
+
+// Die Zitat-Übersicht als dritte Datei - mit und ohne Herkunftslink sowie mit einem mehrzeiligen
+// Zitat, weil genau das (Dialoge) das Layout der Textfelder auf die Probe stellt.
+const bashSeite = renderPage(renderBashSeite(
+    [
+        {
+            nummer: 1, text: 'Ich hab da mal was vorbereitet.', person: 'Tirsis', ersteller: 'Zerix',
+            kontext: '#plauderei', datum: '2026-03-12',
+            quelleUrl: 'https://discord.com/channels/1/2/3',
+        },
+        {
+            nummer: 4, text: 'A: Wer hat den Drachen geweckt?\nB: Nicht ich.', person: 'Acaine', ersteller: 'Tirsis',
+            kontext: 'Sprachkanal', datum: '', quelleUrl: null,
+        },
+    ],
+    'vorschau-token',
+    'Zitat gespeichert.'
+));
+
+const bashZiel = path.join(process.cwd(), 'config-vorschau-bash.html');
+writeFileSync(bashZiel, bashSeite, 'utf-8');
+console.log(`Vorschau geschrieben: ${bashZiel}`);

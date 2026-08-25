@@ -25,7 +25,8 @@ export const HELP_TEXT =
     `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (reagiert auch automatisch auf €-Beträge im Chat)\n` +
     `\`/rollenspiel suche\` – dich als Roleplay-suchend melden und Mitspieler finden (Details: \`/rollenspiel hilfe\`)\n` +
     `\`/anstupser an\` – täglich um 13:37 eine DM vom Bot; rein freiwillig (Details: \`/anstupser hilfe\`)\n` +
-    `\`/geburtstag setzen\` – deinen Geburtstag hinterlegen, damit der Bot gratuliert (Details: \`/geburtstag hilfe\`)\n\n` +
+    `\`/geburtstag setzen\` – deinen Geburtstag hinterlegen, damit der Bot gratuliert (Details: \`/geburtstag hilfe\`)\n` +
+    `\`/bash zitat\` – Sprüche aus dem Chat festhalten und wiederfinden (Details: \`/bash hilfe\`)\n\n` +
     `\`/version\` – aktuelle Bot-Version · \`/hilfe\` – diese Übersicht`;
 
 class HilfeHandler {

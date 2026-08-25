@@ -69,7 +69,7 @@ Diese Dinge haben **mehrere Abnehmer** – ihre ausführliche Begründung steht 
 - **`greetingHandler.holePersoenlicheEmojis`/`emojiFuerNachricht`** – Rangfolge manuell > gelernt > abgeleitet. Abnehmer: Morgengruß selbst + `/pingpong bestenliste`; **muss mit `holeMorgengrussEmojis` (config.settings) gleich bleiben**, die schreibt die Rangfolge wegen der Herkunft-Spalte selbst aus. Details: [Morgengruß](docs/features/morgengruss.md).
 - **`monatsSchluessel`/`formatMonat`** (`pingPongSeason.handler.ts`) – Abnehmer: `pingPong.handler` (Überschrift der Bestenliste), `diagnose`. `PING_PONG_KEYS` (`pingPong.service.ts`) teilen sich beide Ping-Pong-Handler. Details: [Ping-Pong](docs/features/pingpong.md).
 - **`sportHandler.announceReachedMilestones()`** – liegt in **allen** summen-erhöhenden Pfaden, und die liegen an **zwei** Orten: `sport.handler.ts` (User) + `config.settings.ts` (Admin). **Merksatz: wandert eine summen-ändernde Aktion woandershin, muss der Aufruf mitwandern** (Regression 1.55.0–1.60.0). Details: [Sport](docs/features/sport.md).
-- **`interaction.handler.ts`** ist der zentrale Verteiler: Slash-Commands, **beide** Button-Handler (Rollen + Ping-Pong, jeder prüft sein `customId`-Prefix selbst) und die Tipp-Zeile nach jedem Command. Neue Button-Features werden hier verkabelt, nicht per eigenem Listener.
+- **`interaction.handler.ts`** ist der zentrale Verteiler: Slash-Commands, **beide** Button-Handler (Rollen + Ping-Pong, jeder prüft sein `customId`-Prefix selbst), die **Modal-Rückläufe** (`bash.handler`, ebenfalls per `customId`-Prefix) und die **Kontextmenü-Befehle** aus `client.kontextBefehle` sowie die Tipp-Zeile nach jedem Command. Neue Button-/Modal-/Kontextmenü-Features werden hier verkabelt, nicht per eigenem Listener. **Kontextmenü-Befehle gehören in `commands/kontextmenues.ts`, nicht in `commands/index.ts`** – ihre Definition hat keine `options`, die daraus abgeleiteten Hilfe-Tests würden darüber stolpern; registriert werden beide Listen zusammen in einem `rest.put`.
 - **Namensfalle:** `getAllLinks()` gibt es **zweimal** – `character.service` (LotGD-Charaktere) und `twitch.user.service` (Twitch-Konten). Beim Lesen von Code auf den Service schauen, nicht auf den Methodennamen.
 
 **Wenn ein Helfer einen zweiten Abnehmer bekommt, gehört er in eine eigene Datei und hier in die Liste** – so sind `dm.service.ts` (aus dem Anstupser-Handler) und `onlinePoll.handler.ts` (aus dem Beobachten-Handler) entstanden. Grund: ein Baustein, an dem zwei Features hängen, gehört keinem von beiden – sonst hängt Feature B still davon ab, dass Feature A überhaupt aktiv ist.
@@ -94,6 +94,7 @@ Die Detail-Doku je Feature liegt in eigenen Dateien – **jede enthält die Desi
 - [Anstupser](docs/features/anstupser.md) – `/anstupser`, tägliche DM um 13:37
 - [Rollenspiel-Suche](docs/features/rollenspiel.md) – `/rollenspiel`
 - [Blåhaj](docs/features/blahaj.md) – `/blahaj` + Euro-Auto-Listener
+- [Zitatsammlung](docs/features/bash.md) – `/bash`, Erfassen per Rechtsklick auf eine Nachricht (Kontextmenü + Modal)
 - [Tipps & Nettigkeiten](docs/features/tipps.md) – ephemere Zeilen an Slash-Command-Antworten
 - [Hilfe](docs/features/hilfe.md) – `/hilfe`, `/spielwelt`, Gruppen-`hilfe`, die abgeleiteten Hilfe-Tests
 - [Diagnose](docs/features/diagnose.md) – `/diagnose` (Admin-Gesundheitscheck)

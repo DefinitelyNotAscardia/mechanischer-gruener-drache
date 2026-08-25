@@ -41,6 +41,12 @@ vi.mock('../services/drachen.service.js', () => ({
 vi.mock('../services/event.service.js', () => ({
     default: {getEvent: vi.fn(), setEvent: vi.fn(), clearEvent: vi.fn()}
 }));
+vi.mock('../services/bash.service.js', async (original) => ({
+    // parseIsoDatum bleibt echt: speichereBashZitat soll gegen die tatsächliche Datumsprüfung
+    // getestet werden, nicht gegen eine nachgebaute.
+    ...(await original<Record<string, unknown>>()),
+    default: {holeAlle: vi.fn(async () => []), anzahl: vi.fn(async () => 0), aktualisiere: vi.fn(), entferne: vi.fn()}
+}));
 vi.mock('../services/pingPong.service.js', () => ({
     default: {
         getChampionRole: vi.fn(async () => null), setChampionRole: vi.fn(), removeChampionRole: vi.fn()
@@ -57,9 +63,14 @@ import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
 import pingPongService from '../services/pingPong.service.js';
+import bashService from '../services/bash.service.js';
 import {ChannelType, Collection} from 'discord.js';
 import {
     addiereLegacyKilometer,
+    anzahlBashZitate,
+    entferneBashZitat,
+    holeBashZitate,
+    speichereBashZitat,
     entferneEvent,
     entferneMeilenstein,
     holeEventFelder,
@@ -668,5 +679,81 @@ describe('config.settings – Morgengruß-Emojis', () => {
 
         await entferneMeilenstein(2000);
         expect(sportService.removeMilestone).toHaveBeenCalledWith(2000);
+    });
+});
+
+describe('config.settings – Zitatsammlung', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        (client.guilds as any).cache = new Map([['guild-1', {
+            members: {
+                cache: new Collection<string, any>([
+                    ['p1', {id: 'p1', displayName: 'Tirsis', user: {bot: false}}],
+                    ['e1', {id: 'e1', displayName: 'Zerix', user: {bot: false}}],
+                ])
+            }
+        }]]);
+    });
+
+    const zitat = (overrides = {}) => ({
+        nummer: 7, text: 'Ein Spruch', personId: 'p1', kontext: '#plauderei', datum: '2026-03-12',
+        erstellerId: 'e1', erstelltAm: '2026-08-25T10:00:00.000Z',
+        quelle: {channelId: 'c1', messageId: 'm1'}, ...overrides,
+    });
+
+    it('löst IDs zu Anzeigenamen auf und baut den Sprunglink zur Originalnachricht', async () => {
+        (bashService.holeAlle as any).mockResolvedValue([zitat()]);
+
+        expect(await holeBashZitate()).toEqual([{
+            nummer: 7, text: 'Ein Spruch', person: 'Tirsis', ersteller: 'Zerix',
+            kontext: '#plauderei', datum: '2026-03-12',
+            quelleUrl: 'https://discord.com/channels/guild-1/c1/m1',
+        }]);
+    });
+
+    // Wer den Server verlassen hat, taucht sonst gar nicht mehr auf - die rohe ID ist immer noch
+    // besser als eine leere Spalte.
+    it('fällt auf die ID zurück, wenn die Person nicht mehr auf dem Server ist', async () => {
+        (bashService.holeAlle as any).mockResolvedValue([zitat({personId: 'weg', quelle: null})]);
+
+        const [eintrag] = await holeBashZitate();
+        expect(eintrag.person).toBe('weg');
+        expect(eintrag.quelleUrl).toBeNull();
+    });
+
+    it('speichert Wortlaut, Kontext und Datum getrimmt', async () => {
+        (bashService.aktualisiere as any).mockResolvedValue(zitat());
+
+        expect(await speichereBashZitat(7, '  Neu  ', '  Sprachkanal ', '2026-03-12')).toBe(true);
+        expect(bashService.aktualisiere).toHaveBeenCalledWith(7, {
+            text: 'Neu', kontext: 'Sprachkanal', datum: '2026-03-12',
+        });
+    });
+
+    it('deutet leeren Kontext und leeres Datum als bewusst weggelassen', async () => {
+        (bashService.aktualisiere as any).mockResolvedValue(zitat());
+
+        await speichereBashZitat(7, 'Neu', '   ', '');
+        expect(bashService.aktualisiere).toHaveBeenCalledWith(7, {text: 'Neu', kontext: null, datum: null});
+    });
+
+    it('lehnt leeren Wortlaut und unlesbares Datum ab, statt Kaputtes zu schreiben', async () => {
+        expect(await speichereBashZitat(7, '   ', '', '')).toBe(false);
+        expect(await speichereBashZitat(7, 'Neu', '', '2026-02-31')).toBe(false);
+        expect(bashService.aktualisiere).not.toHaveBeenCalled();
+    });
+
+    it('meldet false, wenn die Nummer zwischenzeitlich entfernt wurde', async () => {
+        (bashService.aktualisiere as any).mockResolvedValue(null);
+
+        expect(await speichereBashZitat(7, 'Neu', '', '')).toBe(false);
+    });
+
+    it('reicht Anzahl und Entfernen an den Service durch', async () => {
+        (bashService.anzahl as any).mockResolvedValue(3);
+
+        expect(await anzahlBashZitate()).toBe(3);
+        await entferneBashZitat(7);
+        expect(bashService.entferne).toHaveBeenCalledWith(7);
     });
 });

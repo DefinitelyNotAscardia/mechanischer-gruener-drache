@@ -59,6 +59,8 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `GEBURTSTAG:DATEN` (Hash userId→Datum) | **Geburtstag**, ausschließlich selbst eingetragen (`/geburtstag setzen`): Tag + Monat, **Jahr nur, wenn die Person es freiwillig angibt** (`TT.MM` bzw. `TT.MM.JJJJ`) | bis `/geburtstag entfernen` | Glückwunsch am Tag, `/geburtstag liste` |
 | `GEBURTSTAG:CHANNEL` | Channel-ID des Geburtstagskanals | bis zum Überschreiben | Glückwunsch-Post (gesetzt über `/config`) |
 | `GEBURTSTAG:LAST_DAY` | Tag (YYYY-MM-DD) der zuletzt geposteten Glückwunsch-Runde | bis zum Überschreiben | Doppelpost-Schutz |
+| `BASH:ZITATE` (Hash Nummer→JSON) | **Zitat im Wortlaut** samt Discord-ID der zitierten Person, Ersteller-ID, optionalem Kontext/Datum und der Herkunftsnachricht (Kanal- + Nachrichten-ID) | dauerhaft (bis es entfernt wird) | `/bash zitat`, Übersicht auf `/config/bash` |
+| `BASH:NAECHSTE_NUMMER` | Zähler der zuletzt vergebenen Zitat-Nummer | dauerhaft | Nummernvergabe (gelöschte Nummern werden nie neu vergeben) |
 | `RP:SUCHENDE` (Hash userId→Art) | wer aktuell Roleplay sucht und welche Art (`pbp`/`live`/`beides`) – nur User-ID + Art, kein Zeitstempel, kein Inhalt | bis `/rollenspiel beenden` (kein automatisches Ablaufen) | `/rollenspiel suchende` |
 
 ## Geburtstage (seit 2026-07-29)
@@ -93,6 +95,21 @@ Das ist trotzdem eine qualitative Änderung: für 7 Tage liegt der Klartext der 
 Redis. Auf einem privaten Server mit einem Audit-Log, von dem alle wissen, ist das vertretbar – aber
 es ist eine Entscheidung, keine Nebensache. Wer sie zurücknehmen will: `MESSAGE_CACHE_SECONDS` in
 `logging.service.ts` senken oder die `MessageCreate`-Registrierung in `index.ts` entfernen.
+
+## Zitatsammlung (seit 2026-08-25)
+
+Die einzige Stelle, an der Nachrichteninhalt **dauerhaft** gespeichert wird – die Leitplanke
+„Inhalte nur befristet" gilt hier bewusst nicht. Warum das vertretbar ist:
+
+- **Ein Mensch löst es aus.** Nichts wird automatisch mitgeschrieben; jemand muss eine Nachricht
+  auswählen und ein Formular abschicken. Der Bot beobachtet dafür keinen Kanal.
+- **Es ist sichtbar.** Das Speichern erzeugt eine öffentliche Antwort im Kanal – wer zitiert wurde,
+  bekommt es mit, statt es irgendwann zufällig zu entdecken.
+- **Die zitierte Person darf löschen.** `/bash entfernen` steht ihr genauso offen wie dem Ersteller
+  und den Admins (Details: `docs/features/bash.md`). Ändern darf sie es nicht – das wäre
+  Worte-in-den-Mund-legen; wer mit dem Wortlaut nicht einverstanden ist, löscht.
+- Gespeichert wird nur der ausgewählte Text, nicht die Umgebung: keine vorherigen/folgenden
+  Nachrichten, keine Anhänge, keine Bearbeitungshistorie.
 
 ## Web-Konfigurationsseite / Discord-Login (seit 2026-07-23)
 

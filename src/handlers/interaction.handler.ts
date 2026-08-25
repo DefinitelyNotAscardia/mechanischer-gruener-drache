@@ -1,6 +1,7 @@
 import {ChatInputCommandInteraction, Collection, Events, Interaction, MessageFlags} from "discord.js";
 import client from "../client.js";
 import { Command } from "../types/discord.js";
+import bashHandler from "./bash.handler.js";
 import buttonRoleHandler from "./buttonRole.handler.js";
 import pingPongHandler from "./pingPong.handler.js";
 import tippService, {kommtTippInFrage} from "../services/tipp.service.js";
@@ -19,6 +20,26 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
         await buttonRoleHandler.handleButton(interaction);
         await pingPongHandler.handleDuellButton(interaction);
         await pingPongHandler.handleTaktikButton(interaction);
+        return;
+    }
+
+    // Modal-Handler prüfen wie die Button-Handler selbst per customId-Prefix, ob sie zuständig sind.
+    if (interaction.isModalSubmit()) {
+        await bashHandler.handleModal(interaction);
+        return;
+    }
+
+    // Kontextmenü-Befehle ("Apps" im Rechtsklick-Menü) liegen in einer eigenen Collection, weil sie
+    // eine andere Interaction bekommen als die Slash-Commands. Kein Tipp danach: der hängt sich an
+    // Slash-Antworten, und ein Kontextmenü-Aufruf endet oft in einem Modal (dort geht kein followUp).
+    if (interaction.isMessageContextMenuCommand()) {
+        const kontextBefehl = client.kontextBefehle.get(interaction.commandName);
+        if (!kontextBefehl) return;
+        try {
+            await kontextBefehl.execute(interaction);
+        } catch (error) {
+            console.error("context menu execution error", error);
+        }
         return;
     }
 
