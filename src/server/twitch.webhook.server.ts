@@ -2,6 +2,7 @@ import express, {Request, Response} from 'express';
 import {createHmac, timingSafeEqual} from 'crypto';
 import config from '../../config.json' with {type: 'json'};
 import {StreamOnlineEvent} from "../types/streamOnlineEvent.js";
+import {setzeClacksHeader} from './clacks.js';
 
 const TWITCH_MESSAGE_ID = 'twitch-eventsub-message-id';
 const TWITCH_MESSAGE_TIMESTAMP = 'twitch-eventsub-message-timestamp';
@@ -31,6 +32,11 @@ class TwitchWebhookServer {
     }
 
     constructor() {
+        // Ganz vorn, vor jeder Route: diese App traegt auch die Verwaltungsseite (index.ts haengt
+        // configRouter hier ein), der Kopf gilt damit fuer alles, was der Bot ausliefert. Weiter
+        // unten eingehaengt wuerde /twitch daran vorbeilaufen - Express nimmt die erste passende
+        // Registrierung, und die Twitch-Route steht schon hier im Konstruktor.
+        this.#app.use(setzeClacksHeader);
         this.#app.use('/twitch', express.raw({type: 'application/json'}));
         this.#app.post('/twitch/eventsub', (req: Request, res: Response) => {
             this.#handleEventSub(req, res);
