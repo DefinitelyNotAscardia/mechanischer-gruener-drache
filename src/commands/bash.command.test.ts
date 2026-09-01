@@ -5,6 +5,7 @@ vi.mock('../handlers/bash.handler.js', () => ({
         handleZitat: vi.fn(),
         handleBearbeiten: vi.fn(),
         handleEntfernen: vi.fn(),
+        handleAnzahl: vi.fn(),
         handleHilfe: vi.fn(),
     }
 }));
@@ -25,6 +26,7 @@ describe('bash.command', () => {
         ['zitat', 'handleZitat'],
         ['bearbeiten', 'handleBearbeiten'],
         ['entfernen', 'handleEntfernen'],
+        ['anzahl', 'handleAnzahl'],
         ['hilfe', 'handleHilfe'],
     ] as const)('leitet Subcommand "%s" an bashHandler.%s weiter', async (subcommand, method) => {
         const interaction = mockInteraction(subcommand);
@@ -40,6 +42,7 @@ describe('bash.command', () => {
         expect(bashHandler.handleZitat).not.toHaveBeenCalled();
         expect(bashHandler.handleBearbeiten).not.toHaveBeenCalled();
         expect(bashHandler.handleEntfernen).not.toHaveBeenCalled();
+        expect(bashHandler.handleAnzahl).not.toHaveBeenCalled();
         expect(bashHandler.handleHilfe).not.toHaveBeenCalled();
     });
 
@@ -47,7 +50,7 @@ describe('bash.command', () => {
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = bashCommand.data.options.map((option) => option.toJSON().name);
 
-        expect(definedSubcommands.sort()).toEqual(['bearbeiten', 'entfernen', 'hilfe', 'zitat']);
+        expect(definedSubcommands.sort()).toEqual(['anzahl', 'bearbeiten', 'entfernen', 'hilfe', 'zitat']);
     });
 
     // Das Hinzufügen läuft bewusst NICHT über einen Subcommand: ein Slash-Command bekommt von

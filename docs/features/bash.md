@@ -32,6 +32,9 @@
 
 - Vergeben per `INCR` auf `BASH:NAECHSTE_NUMMER` (Hochzählen und Lesen in einem Schritt, damit zwei
   gleichzeitige Speicherungen nicht dieselbe Nummer bekommen).
+- `/bash anzahl` nennt neben dem Bestand auch die **höchste vorhandene Nummer** – wegen der Lücken
+  (siehe unten) wäre „42 Zitate" allein irreführend, wer daraus auf `/bash zitat 42` schließt, landet
+  womöglich in einer Lücke. Gezählt wird der Bestand (`holeAlle`), nicht der Zähler.
 - **Gelöschte Nummern werden nie neu vergeben** – der Zähler läuft dem Bestand davon. Grund: „Zitat 69"
   wird im Chat verlinkt und zitiert; würde die Nummer nachrücken, zeigte ein alter Verweis später
   still etwas anderes. `/bash zitat 69` erklärt eine freie Nummer deshalb ausdrücklich als Lücke.

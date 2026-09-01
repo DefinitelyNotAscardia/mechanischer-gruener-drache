@@ -334,6 +334,28 @@ describe('BashHandler – Befehle', () => {
         expect(service.entferne).not.toHaveBeenCalled();
     });
 
+    it('nennt Bestand und höchste Nummer', async () => {
+        service.holeAlle.mockResolvedValue([zitat({nummer: 3}), zitat({nummer: 9})]);
+        const interaction = slashInteraction();
+
+        await bashHandler.handleAnzahl(interaction);
+
+        expect(interaction.reply.mock.calls[0][0]).toContain('2 Zitate');
+        // Die höchste Nummer gehört dazu, weil gelöschte Nummern nie nachrücken - aus "2 Zitate"
+        // allein ließe sich sonst auf die Nummern schließen.
+        expect(interaction.reply.mock.calls[0][0]).toContain('#9');
+    });
+
+    it('sagt bei leerer Sammlung, wie man sie füllt', async () => {
+        service.holeAlle.mockResolvedValue([]);
+        const interaction = slashInteraction();
+
+        await bashHandler.handleAnzahl(interaction);
+
+        expect(interaction.reply.mock.calls[0][0].content).toContain('noch leer');
+        expect(interaction.reply.mock.calls[0][0].flags).toBe(MessageFlags.Ephemeral);
+    });
+
     it('nennt in der Hilfe alle Befehle und den Weg zum Festhalten', async () => {
         const interaction = slashInteraction();
 
@@ -341,6 +363,7 @@ describe('BashHandler – Befehle', () => {
 
         const text = interaction.reply.mock.calls[0][0] as string;
         expect(text).toContain('/bash zitat');
+        expect(text).toContain('/bash anzahl');
         expect(text).toContain('Rechtsklick');
     });
 });

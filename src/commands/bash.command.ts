@@ -32,6 +32,9 @@ export default {
                 .setRequired(true)
                 .setMinValue(1)))
         .addSubcommand(sub => sub
+            .setName('anzahl')
+            .setDescription('Sagt, wie viele Zitate bislang gesammelt wurden'))
+        .addSubcommand(sub => sub
             .setName('hilfe')
             .setDescription('Zeigt alle verfuegbaren Zitat-Befehle')),
 
@@ -45,6 +48,8 @@ export default {
                 return bashHandler.handleBearbeiten(interaction);
             case 'entfernen':
                 return bashHandler.handleEntfernen(interaction);
+            case 'anzahl':
+                return bashHandler.handleAnzahl(interaction);
             case 'hilfe':
                 return bashHandler.handleHilfe(interaction);
         }

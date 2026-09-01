@@ -284,6 +284,24 @@ class BashHandler {
         });
     }
 
+    // Bestandsmeldung. Genannt wird zusätzlich die höchste vergebene Nummer: weil gelöschte
+    // Nummern nie nachrücken, ist "42 Zitate" allein irreführend - wer daraus auf /bash zitat 42
+    // schließt, kann in einer Lücke landen.
+    async handleAnzahl(interaction: ChatInputCommandInteraction) {
+        const alle = await bashService.holeAlle();
+
+        if (!alle.length) {
+            return interaction.reply({
+                content: 'Die Zitatsammlung ist noch leer. Rechtsklick auf eine Nachricht (mobil: gedrückt halten) → Apps → „Als Bash-Zitat speichern" füllt sie.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const hoechste = alle[alle.length - 1].nummer;
+        const bestand = alle.length === 1 ? 'steht **1 Zitat**' : `stehen **${alle.length} Zitate**`;
+        return interaction.reply(`In der Zitatsammlung ${bestand}, die höchste Nummer ist #${hoechste}.`);
+    }
+
     async handleHilfe(interaction: ChatInputCommandInteraction) {
         return interaction.reply(
             `**Zitat-Befehle**\n\n` +
@@ -292,6 +310,7 @@ class BashHandler {
             `**/bash zitat** – ein zufälliges Zitat, mit \`nummer\` genau das gewünschte\n` +
             `**/bash bearbeiten** – Wortlaut/Kontext/Datum ändern (nur eigene Zitate, Admins alle)\n` +
             `**/bash entfernen** – Zitat löschen (eigene, solche über dich selbst, Admins alle)\n` +
+            `**/bash anzahl** – wie viele Zitate bislang gesammelt wurden\n` +
             `**/bash hilfe** – Zeigt diese Übersicht`
         );
     }
