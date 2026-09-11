@@ -20,6 +20,7 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
         await buttonRoleHandler.handleButton(interaction);
         await pingPongHandler.handleDuellButton(interaction);
         await pingPongHandler.handleTaktikButton(interaction);
+        await pingPongHandler.handleRundlaufButton(interaction);
         return;
     }
 

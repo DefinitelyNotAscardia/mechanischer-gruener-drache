@@ -20,8 +20,8 @@ export const HELP_TEXT =
     `\`/event countdown\` – wie lange noch bis zum nächsten Community-Event?\n\n` +
     `**Spiel & Spaß**\n` +
     `\`/pingpong herausfordern\` – jemanden zum Ping-Pong-Duell fordern, er nimmt per Button an\n` +
-    `\`/pingpong ansageduell\` – Duell mit angesagtem Sieg · \`/pingpong taktikduell\` – Duell mit verdeckter Aktion (Details: \`/pingpong hilfe\`)\n` +
-    `\`/pingpong ruhmeshalle\` – die Punkte laufen monatsweise, hier stehen die bisherigen Champions\n` +
+    `\`/pingpong ansageduell\` · \`/pingpong taktikduell\` · \`/pingpong rundlauf\` – mit Ansage, mit verdeckter Aktion, zu mehreren\n` +
+    `\`/pingpong ruhmeshalle\` – die Punkte laufen monatsweise, hier stehen die Champions (Details: \`/pingpong hilfe\`)\n` +
     `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (reagiert auch automatisch auf €-Beträge im Chat)\n` +
     `\`/rollenspiel suche\` – dich als Roleplay-suchend melden und Mitspieler finden (Details: \`/rollenspiel hilfe\`)\n` +
     `\`/anstupser an\` – täglich um 13:37 eine DM vom Bot; rein freiwillig (Details: \`/anstupser hilfe\`)\n` +

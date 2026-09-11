@@ -5,6 +5,7 @@ vi.mock('../handlers/pingPong.handler.js', () => ({
         handleHerausfordern: vi.fn(),
         handleAnsageduell: vi.fn(),
         handleTaktikduell: vi.fn(),
+        handleRundlauf: vi.fn(),
         handlePingPongHighscore: vi.fn(),
         handleSerienrekorde: vi.fn(),
         handleHilfe: vi.fn(),
@@ -32,6 +33,7 @@ describe('ping.command', () => {
         ['herausfordern', 'handleHerausfordern'],
         ['ansageduell', 'handleAnsageduell'],
         ['taktikduell', 'handleTaktikduell'],
+        ['rundlauf', 'handleRundlauf'],
         ['bestenliste', 'handlePingPongHighscore'],
         ['serienrekorde', 'handleSerienrekorde'],
         ['hilfe', 'handleHilfe'],
@@ -57,6 +59,7 @@ describe('ping.command', () => {
         expect(pingPongHandler.handleHerausfordern).not.toHaveBeenCalled();
         expect(pingPongHandler.handleAnsageduell).not.toHaveBeenCalled();
         expect(pingPongHandler.handleTaktikduell).not.toHaveBeenCalled();
+        expect(pingPongHandler.handleRundlauf).not.toHaveBeenCalled();
         expect(pingPongHandler.handlePingPongHighscore).not.toHaveBeenCalled();
         expect(pingPongHandler.handleSerienrekorde).not.toHaveBeenCalled();
         expect(pingPongSeasonHandler.handleRuhmeshalle).not.toHaveBeenCalled();
@@ -66,6 +69,6 @@ describe('ping.command', () => {
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = pingCommand.data.options.map((option) => option.toJSON().name);
 
-        expect(definedSubcommands.sort()).toEqual(['ansageduell', 'bestenliste', 'herausfordern', 'hilfe', 'ruhmeshalle', 'serienrekorde', 'taktikduell']);
+        expect(definedSubcommands.sort()).toEqual(['ansageduell', 'bestenliste', 'herausfordern', 'hilfe', 'ruhmeshalle', 'rundlauf', 'serienrekorde', 'taktikduell']);
     });
 });

@@ -148,6 +148,107 @@ export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beend
     return saetze.length > 0 ? saetze.join(' ') : null;
 }
 
+// Rundlauf ("Chinesisch", auch Ringelpitz): alle stehen gleichzeitig an der Platte und laufen
+// reihum drumherum - wer den Ball nicht zurückbringt, fliegt raus. Das geht weiter, bis zwei übrig
+// sind; die tragen ein normales Match aus (spieleDuell, derselbe Zufall wie beim Duell).
+//
+// Anders als die Duelle braucht der Rundlauf eine TEILNEHMERLISTE, und die passt nicht in eine
+// customId (100 Zeichen, eine einzige Discord-ID belegt davon schon 18). Sie steht deshalb in der
+// Lobby-Nachricht selbst - der Bot liest seinen eigenen Text zurück (parseTeilnehmer). Damit bleibt
+// auch der Rundlauf zustandslos und übersteht einen Neustart, genau wie die Duelle; gespeichert
+// wird erst das Ergebnis. Aus demselben Grund steht die Liste auf einer EIGENEN Zeile mit festem
+// Marker: so kann der übrige Text geändert werden, ohne dass das Parsen bricht.
+const RUNDLAUF_PREFIX = 'pingpong-rundlauf:';
+const TEILNEHMER_MARKER = 'An der Platte';
+
+// Unter drei Leuten ist es kein Rundlauf, sondern ein Duell (dafür gibt es `herausfordern`).
+// Die Obergrenze hält Nachricht und Punkteverteilung im Rahmen - an einer Platte ist irgendwann
+// schlicht kein Platz mehr.
+export const MIN_RUNDLAUF = 3;
+export const MAX_RUNDLAUF = 10;
+
+// Beide Finalisten bekommen einen Punkt extra: das Finale ist die eigentliche Leistung, und ohne
+// den Bonus wäre der Sprung vom letzten Ausgeschiedenen ins Finale nicht mehr wert als jedes
+// andere Weiterkommen.
+const RUNDLAUF_FINAL_BONUS = 1;
+
+// Die Teilnehmerzeile der Lobby - Gegenstück zu parseTeilnehmer. Die Reihenfolge ist die
+// Beitrittsreihenfolge, also die Aufstellung um die Platte.
+export function formatTeilnehmerZeile(teilnehmer: string[]): string {
+    return `${TEILNEHMER_MARKER} (${teilnehmer.length}): ${teilnehmer.map(id => `<@${id}>`).join(' ')}`;
+}
+
+// Liest die Teilnehmer aus der Lobby-Nachricht zurück (siehe RUNDLAUF_PREFIX). Bewusst nur aus der
+// Marker-Zeile: der Eröffner wird im Text darüber ebenfalls erwähnt und stünde sonst doppelt drin.
+// Doppelte IDs fliegen trotzdem raus - eine Platte, eine Person.
+export function parseTeilnehmer(inhalt: string): string[] {
+    const zeile = inhalt.split('\n').find(z => z.startsWith(TEILNEHMER_MARKER));
+    if (!zeile) return [];
+
+    const ids = [...zeile.matchAll(/<@!?(\d+)>/g)].map(treffer => treffer[1]);
+    return [...new Set(ids)];
+}
+
+export interface RundlaufErgebnis {
+    // Aufsteigend nach Platzierung: vorne der als Erstes Ausgeschiedene, hinten der Sieger.
+    reihenfolge: string[];
+    // Das Finale der letzten beiden, aus Sicht des Siegers.
+    finalSatz: {siegerPunkte: number; verliererPunkte: number};
+}
+
+// Spielt den Rundlauf durch: Runde für Runde fliegt zufällig eine Person raus (jeder Ball ist wie
+// im Duell ein Münzwurf, nur eben reihum), bis zwei übrig sind - die spielen ein echtes Match.
+// Exportiert + getestet, die Punktevergabe hängt daran.
+export function spieleRundlauf(teilnehmer: string[]): RundlaufErgebnis {
+    const imSpiel = [...teilnehmer];
+    const reihenfolge: string[] = [];
+
+    while (imSpiel.length > 2) {
+        const [ausgeschieden] = imSpiel.splice(Math.floor(Math.random() * imSpiel.length), 1);
+        reihenfolge.push(ausgeschieden);
+    }
+
+    const {herausfordererPunkte, gegnerPunkte} = spieleDuell();
+    const ersterGewinnt = herausfordererPunkte > gegnerPunkte;
+    const [erster, zweiter] = imSpiel;
+
+    reihenfolge.push(ersterGewinnt ? zweiter : erster, ersterGewinnt ? erster : zweiter);
+
+    return {
+        reihenfolge,
+        finalSatz: {
+            siegerPunkte: Math.max(herausfordererPunkte, gegnerPunkte),
+            verliererPunkte: Math.min(herausfordererPunkte, gegnerPunkte),
+        },
+    };
+}
+
+// Punkte je Platz, in derselben Reihenfolge wie RundlaufErgebnis.reihenfolge (also der als Erstes
+// Ausgeschiedene zuerst). Roh bekommt jeder so viele Punkte, wie er Mitspieler überlebt hat, dazu
+// den Finalisten-Bonus - bei fünf Leuten also 0 / 1 / 2 / 4 / 5.
+//
+// Davon wird der (gerundete) Schnitt abgezogen, aus 0/1/2/4/5 wird also -2/-1/0/+2/+3. Grund: ein
+// Duell ist Nullsumme (+1/-1), ein Rundlauf ohne Abzug würde bei fünf Leuten 12 Punkte in die
+// Season schütten und die Duelle in der Bestenliste verdrängen - dieselbe Überlegung wie bei
+// ANSAGE_BONUS/ANSAGE_MALUS. Weil Punkte ganzzahlig sind, geht die Rechnung nicht immer glatt auf:
+// es bleibt ein Rest von weniger als der halben Teilnehmerzahl stehen (bei fünf Leuten +2). Das ist
+// gewollte Ungenauigkeit statt Bruchrechnung in der Bestenliste.
+export function rundlaufPunkte(anzahl: number): number[] {
+    const roh = Array.from({length: anzahl}, (_, platz) =>
+        platz + (platz >= anzahl - 2 ? RUNDLAUF_FINAL_BONUS : 0));
+
+    const abzug = Math.round(roh.reduce((summe, wert) => summe + wert, 0) / anzahl);
+    return roh.map(punkte => punkte - abzug);
+}
+
+// Vorzeichenbehaftete Anzeige der Punkteänderung - die 0 bekommt bewusst ein ±, sonst liest sich
+// die Zeile, als wäre die Änderung vergessen worden.
+export function formatDelta(delta: number): string {
+    if (delta > 0) return `+${delta}`;
+    if (delta < 0) return `${delta}`;
+    return '±0';
+}
+
 class PingPongHandler {
 
     async handleHerausfordern(interaction: ChatInputCommandInteraction) {
@@ -215,12 +316,18 @@ class PingPongHandler {
             return 'Bots haben keine Hände. Fordere jemanden aus Fleisch und Blut heraus.';
         }
 
-        const remaining = await redisService.getTimeToLive(PING_PONG_KEYS.cooldown(herausfordererId));
+        return this.pruefeCooldown(herausfordererId);
+    }
+
+    // Der Cooldown allein, ohne Gegner-Prüfung: der Rundlauf hat keinen benannten Gegner, teilt
+    // sich den Key aber mit den Duellen - sonst könnte man abwechselnd über mehrere Befehle spammen.
+    async pruefeCooldown(userId: string): Promise<string | null> {
+        const remaining = await redisService.getTimeToLive(PING_PONG_KEYS.cooldown(userId));
         if (remaining > 0) {
             return `Kurz durchatmen – du kannst in **${remaining}s** wieder aufschlagen.`;
         }
 
-        await redisService.setWithExpiry(PING_PONG_KEYS.cooldown(herausfordererId), '1', COOLDOWN_SECONDS);
+        await redisService.setWithExpiry(PING_PONG_KEYS.cooldown(userId), '1', COOLDOWN_SECONDS);
         return null;
     }
 
@@ -427,6 +534,187 @@ class PingPongHandler {
         }
     }
 
+    // Rundlauf: eine offene Lobby statt einer gezielten Herausforderung. Wer mitspielen will,
+    // stellt sich per Button dazu; gestartet wird von Hand, weil niemand wissen kann, wer noch
+    // dazukommt. Der Eröffner steht von Anfang an mit an der Platte (er hat aufgerufen).
+    async handleRundlauf(interaction: ChatInputCommandInteraction) {
+        try {
+            const abfuhr = await this.pruefeCooldown(interaction.user.id);
+            if (abfuhr) {
+                return interaction.reply({content: abfuhr, flags: MessageFlags.Ephemeral});
+            }
+
+            return interaction.reply({
+                content: this.baueLobbyText(interaction.user.id, [interaction.user.id]),
+                components: [this.baueRundlaufButtons(interaction.user.id)],
+            });
+        } catch (error) {
+            console.error('Fehler beim Eröffnen des Ping-Pong-Rundlaufs:', error);
+            return interaction.reply({
+                content: 'Es gab einen Fehler beim Ausführen des Befehls.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    }
+
+    // Der Lobby-Text wird bei jedem Beitritt neu gebaut - die Teilnehmerzeile am Ende ist zugleich
+    // der Speicherort der Runde (siehe parseTeilnehmer).
+    baueLobbyText(eroeffnerId: string, teilnehmer: string[]): string {
+        return `<@${eroeffnerId}> eröffnet einen **Rundlauf** – Chinesisch, einmal rund um die Platte.\n`
+            + `Alle spielen gleichzeitig: reihum wird angenommen, wer den Ball nicht zurückbringt, fliegt raus. `
+            + `Am Ende tragen die letzten beiden ein Match auf **${POINTS_TO_WIN}** gewonnene Ballwechsel aus.\n`
+            + `Punkte nach Platzierung – die vorderen Plätze gewinnen, die hinteren zahlen drauf (nie unter 0), `
+            + `die beiden Finalisten bekommen **+${RUNDLAUF_FINAL_BONUS}** extra.\n`
+            + `Ab **${MIN_RUNDLAUF}** Personen kann <@${eroeffnerId}> losspielen, mehr als **${MAX_RUNDLAUF}** passen nicht an die Platte.\n\n`
+            + formatTeilnehmerZeile(teilnehmer);
+    }
+
+    baueRundlaufButtons(eroeffnerId: string): ActionRowBuilder<ButtonBuilder> {
+        return new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`${RUNDLAUF_PREFIX}beitreten:${eroeffnerId}`)
+                .setLabel('An die Platte')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`${RUNDLAUF_PREFIX}verlassen:${eroeffnerId}`)
+                .setLabel('Doch nicht')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId(`${RUNDLAUF_PREFIX}starten:${eroeffnerId}`)
+                .setLabel('Losspielen')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`${RUNDLAUF_PREFIX}abbrechen:${eroeffnerId}`)
+                .setLabel('Abbrechen')
+                .setStyle(ButtonStyle.Danger),
+        );
+    }
+
+    // Eigener Einstiegspunkt wie handleTaktikButton (in interaction.handler.ts zusätzlich
+    // verkabelt, jeder Button-Handler prüft sein Prefix selbst). Der Zustand kommt aus der
+    // Nachricht, nicht aus der customId - dort steht nur, wer die Runde eröffnet hat.
+    async handleRundlaufButton(interaction: ButtonInteraction) {
+        if (!interaction.customId.startsWith(RUNDLAUF_PREFIX)) return;
+
+        try {
+            const [aktion, eroeffnerId] = interaction.customId.slice(RUNDLAUF_PREFIX.length).split(':');
+            const teilnehmer = parseTeilnehmer(interaction.message.content);
+            const istEroeffner = interaction.user.id === eroeffnerId;
+
+            if (aktion === 'abbrechen') {
+                if (!istEroeffner) {
+                    return interaction.reply({
+                        content: 'Nur wer den Rundlauf eröffnet hat, kann ihn absagen.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+                return interaction.update({
+                    content: `<@${eroeffnerId}> sagt den Rundlauf ab. Die Platte bleibt heute leer.`,
+                    components: []
+                });
+            }
+
+            if (aktion === 'beitreten') {
+                if (teilnehmer.includes(interaction.user.id)) {
+                    return interaction.reply({
+                        content: 'Du stehst schon an der Platte.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+                if (teilnehmer.length >= MAX_RUNDLAUF) {
+                    return interaction.reply({
+                        content: `An der Platte ist kein Platz mehr – mehr als ${MAX_RUNDLAUF} Leute werden zum Gedränge.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+                return interaction.update({
+                    content: this.baueLobbyText(eroeffnerId, [...teilnehmer, interaction.user.id]),
+                    components: [this.baueRundlaufButtons(eroeffnerId)],
+                });
+            }
+
+            if (aktion === 'verlassen') {
+                // Der Eröffner ist der Gastgeber: ginge er, bliebe eine Runde stehen, die niemand
+                // mehr starten kann (der Start hängt an seiner ID in der customId).
+                if (istEroeffner) {
+                    return interaction.reply({
+                        content: 'Du hast die Runde eröffnet – wenn du nicht mehr magst, sag sie über **Abbrechen** ab.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+                if (!teilnehmer.includes(interaction.user.id)) {
+                    return interaction.reply({
+                        content: 'Du stehst gar nicht an der Platte.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+                return interaction.update({
+                    content: this.baueLobbyText(eroeffnerId, teilnehmer.filter(id => id !== interaction.user.id)),
+                    components: [this.baueRundlaufButtons(eroeffnerId)],
+                });
+            }
+
+            if (!istEroeffner) {
+                return interaction.reply({
+                    content: 'Nur wer den Rundlauf eröffnet hat, startet ihn auch.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+            if (teilnehmer.length < MIN_RUNDLAUF) {
+                return interaction.reply({
+                    content: `Zu zweit ist das ein Duell, kein Rundlauf – es braucht mindestens **${MIN_RUNDLAUF}** Leute `
+                        + `(\`/pingpong herausfordern\` wäre der richtige Befehl).`,
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            return interaction.update(await this.spieleUndWerteRundlaufAus(teilnehmer));
+        } catch (error) {
+            console.error('Fehler beim Austragen des Ping-Pong-Rundlaufs:', error);
+            if (!interaction.replied) {
+                await interaction.reply({
+                    content: 'Der Rundlauf konnte nicht ausgetragen werden.',
+                    flags: MessageFlags.Ephemeral
+                }).catch(() => {});
+            }
+        }
+    }
+
+    // Spielt die Runde durch, schreibt die Punkte fort und baut die Ergebnisnachricht. Getrennt von
+    // handleRundlaufButton, damit der Ablauf ohne Discord-Interaction testbar bleibt.
+    async spieleUndWerteRundlaufAus(teilnehmer: string[]): Promise<{content: string, components: []}> {
+        const {reihenfolge, finalSatz} = spieleRundlauf(teilnehmer);
+        const punkte = rundlaufPunkte(reihenfolge.length);
+
+        const siegerId = reihenfolge[reihenfolge.length - 1];
+        const finalVerliererId = reihenfolge[reihenfolge.length - 2];
+
+        // Bewusst der Reihe nach statt parallel: getScore legt fehlende Einzelkeys selbst an, und
+        // zwei gleichzeitige Schreibvorgänge auf denselben Key sind unnötiges Risiko.
+        const zeilen: string[] = [];
+        for (let platz = reihenfolge.length - 1; platz >= 0; platz--) {
+            const userId = reihenfolge[platz];
+            const alterScore = await this.getScore(userId);
+            const neuerScore = await this.updateScore(userId, Math.max(0, alterScore + punkte[platz]));
+
+            zeilen.push(`${reihenfolge.length - platz}. <@${userId}> **${formatDelta(punkte[platz])}** → ${neuerScore} Punkte`);
+        }
+
+        // Die Serie richtet sich nach dem Finale: das ist das einzige echte Match im Rundlauf.
+        // Wer vorher rausgeflogen ist, verliert seine laufende Serie also nicht - er hat auch
+        // gegen niemanden verloren.
+        const serienZeile = formatSerie(await this.verarbeiteSerie(siegerId, finalVerliererId));
+
+        return {
+            content: `**<@${siegerId}> gewinnt den Rundlauf.**\n`
+                + `Im Finale gegen <@${finalVerliererId}> steht es am Ende ${finalSatz.siegerPunkte}:${finalSatz.verliererPunkte}. `
+                + `${randomDuellFlavor()}\n\n`
+                + zeilen.join('\n')
+                + (serienZeile ? `\n\n${serienZeile}` : ''),
+            components: []
+        };
+    }
+
     // Schreibt die Siegesserie beider Seiten fort: der Sieger zählt hoch (INCR legt den Key bei
     // Bedarf selbst an), die Serie des Verlierers ist beendet und wird gelöscht. Den Rekord halten
     // wir separat, damit er die abgerissene Serie überdauert.
@@ -594,6 +882,10 @@ class PingPongHandler {
             + `gewinnst du, gibt es **+${ANSAGE_BONUS}** Punkt extra – verlierst du, kostet die große Klappe **${ANSAGE_MALUS}** Punkt zusätzlich\n` +
             `**/pingpong taktikduell** – Duell mit verdeckter Aktion: Schmetterball schlägt Lupfer, `
             + `Lupfer schlägt Konter, Konter schlägt Schmetterball (bei gleicher Wahl entscheidet der Ballwechsel)\n` +
+            `**/pingpong rundlauf** – Rundlauf („Chinesisch") für mehrere: alle stellen sich per Button an die Platte, `
+            + `dann fliegt Runde für Runde einer raus, bis die letzten beiden das Finale ausspielen. `
+            + `Punkte nach Platzierung – die vorderen Plätze gewinnen, die hinteren zahlen drauf, `
+            + `die beiden Finalisten bekommen **+${RUNDLAUF_FINAL_BONUS}** extra (mindestens ${MIN_RUNDLAUF}, höchstens ${MAX_RUNDLAUF} Leute)\n` +
             `**/pingpong bestenliste** – Die Top 10 der laufenden Season, mit laufender Siegesserie\n` +
             `**/pingpong ruhmeshalle** – Die Champions der vergangenen Monate\n` +
             `**/pingpong serienrekorde** – Die längsten je erreichten Siegesserien (übersteht den Reset)\n` +

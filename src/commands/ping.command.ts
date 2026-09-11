@@ -37,6 +37,9 @@ export default {
                     {name: 'Lupfer (schlägt Konter)', value: 'lupfer'},
                 )))
         .addSubcommand(sub => sub
+            .setName('rundlauf')
+            .setDescription('Rundlauf (Chinesisch) fuer mehrere: wer den Ball nicht zurueckbringt, fliegt raus'))
+        .addSubcommand(sub => sub
             .setName('bestenliste')
             .setDescription('Zeigt die Ping-Pong-Bestenliste'))
         .addSubcommand(sub => sub
@@ -59,6 +62,8 @@ export default {
                 return pingPongHandler.handleAnsageduell(interaction);
             case 'taktikduell':
                 return pingPongHandler.handleTaktikduell(interaction);
+            case 'rundlauf':
+                return pingPongHandler.handleRundlauf(interaction);
             case 'bestenliste':
                 return pingPongHandler.handlePingPongHighscore(interaction);
             case 'ruhmeshalle':
