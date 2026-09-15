@@ -12,6 +12,7 @@ export const SportActivities = {
     schwimmen: '🏊 Schwimmen',
     wandern: '🚶 Wandern',
     skifahren: '⛷️ Skifahren',
+    krafttraining: '💪 Krafttraining',
 } as const;
 
 export type SportActivity = keyof typeof SportActivities;
