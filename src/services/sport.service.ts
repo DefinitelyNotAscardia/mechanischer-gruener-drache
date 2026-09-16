@@ -62,10 +62,13 @@ class SportService {
         if (entry.userId !== userId) return null;
 
         const diff = newKilometers - entry.kilometers;
-        const minutesDiff = (newMinutes ?? 0) - (entry.minutes ?? 0);
+        const minutesDiff =
+            newMinutes !== undefined
+                ? newMinutes - (entry.minutes ?? 0)
+                : 0;
 
         entry.kilometers = newKilometers;
-        entry.minutes = newMinutes;
+        entry.minutes = newMinutes ?? entry.minutes;
 
         await redisService.set(KEYS.entry(entryId), JSON.stringify(entry));
         await redisService.incrementSortedSet(KEYS.highscore, userId, diff);
@@ -118,6 +121,10 @@ class SportService {
         return entries.filter((e): e is SportEntry => e !== null);
     }
 
+    async setKilometer(userId: string, kilometers: number): Promise<void> {
+        await redisService.setSortedSet(KEYS.highscore, userId, kilometers);
+    }
+
     async getGesamtKilometer(): Promise<number> {
         const alle = await redisService.getSortedSetAll(KEYS.highscore);
         return alle.reduce((sum, item) => sum + item.score, 0);
@@ -126,10 +133,6 @@ class SportService {
     async getGesamtMinuten(): Promise<number> {
         const alle = await redisService.getSortedSetAll(KEYS.minutes);
         return alle.reduce((sum, item) => sum + item.score, 0);
-    }
-
-    async setKilometer(userId: string, kilometers: number): Promise<void> {
-        await redisService.setSortedSet(KEYS.highscore, userId, kilometers);
     }
 
     // Alle Kilometerstände als Map userId -> km (inklusive des Legacy-Dummy-Users). Basis dafür,
