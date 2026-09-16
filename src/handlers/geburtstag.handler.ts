@@ -27,6 +27,11 @@ const TAGE_IM_MONAT = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 // Wie weit zurück ein Geburtsjahr liegen darf. Reine Plausibilitätsgrenze gegen Vertipper.
 export const FRUEHESTES_JAHR = 1900;
 
+// Der Bot hat selbst Geburtstag: der erste Commit ("Init") ist vom 11.06.2026. Fest verdrahtet
+// statt im Redis-Hash - er trägt sich nicht selbst ein, und ein Eintrag, den niemand über
+// /geburtstag entfernen kann, gehört nicht in die Datenhaltung (siehe docs/datenhaltung.md).
+export const BOT_GEBURTSTAG: Geburtstag = {tag: 11, monat: 6, jahr: 2026};
+
 // Prüft Tag/Monat (und, falls angegeben, das Jahr) auf Plausibilität. Ohne Jahr ist der 29.02.
 // erlaubt; MIT Jahr wird gegen das echte Datum geprüft, damit "29.02.1995" (kein Schaltjahr) auffällt.
 export function istGueltigesDatum(tag: number, monat: number, jahr: number | null): boolean {
@@ -116,6 +121,18 @@ export const GEBURTSTAG_HILFE =
     `Am Tag selbst gratuliere ich im Geburtstagskanal. Das **Jahr ist freiwillig** – gibst du es an, ` +
     `nenne ich beim Gratulieren auch das Alter; ohne Jahr eben nicht. Alles nur, wenn du dich selbst einträgst.`;
 
+// Die anzuzeigenden Einträge: die hinterlegten - aber nur von aktuellen Mitgliedern, ein Eintrag
+// ohne Mitglied wäre eine tote Erwähnung - plus der fest verdrahtete Bot-Geburtstag. Der Bot steht
+// bewusst nicht unter dem Mitglieder-Filter: er ist immer auf dem Server, und ein leerer
+// members.cache soll ihn nicht verschlucken. Ein (theoretisch) gespeicherter Eintrag unter seiner
+// ID wird vom festen überschrieben.
+function sammleEintraege(alle: Record<string, Geburtstag>, mitglied: (userId: string) => boolean): [string, Geburtstag][] {
+    const botId = client.user?.id;
+    const eintraege = Object.entries(alle)
+        .filter(([userId]) => userId !== botId && mitglied(userId));
+    return botId ? [...eintraege, [botId, BOT_GEBURTSTAG]] : eintraege;
+}
+
 class GeburtstagHandler {
     async handleSetzen(interaction: ChatInputCommandInteraction) {
         const tag = interaction.options.getInteger('tag', true);
@@ -177,11 +194,12 @@ class GeburtstagHandler {
 
         // Nur Leute, die noch auf dem Server sind - ein Eintrag ohne Mitglied wäre eine tote Erwähnung.
         const guild = client.guilds.cache.get(config.GUILD_ID);
-        const eintraege = Object.entries(alle)
-            .filter(([userId]) => guild?.members.cache.has(userId))
+        const eintraege = sammleEintraege(alle, (userId) => !!guild?.members.cache.has(userId))
             .map(([userId, geburtstag]) => ({userId, geburtstag, naechster: naechstesVorkommen(geburtstag, heute)}))
             .sort((a, b) => a.naechster.getTime() - b.naechster.getTime());
 
+        // Praktisch unerreichbar, seit der Bot selbst mitgeführt wird (nur vor dem Login, wenn
+        // client.user noch fehlt) - bleibt als Absicherung stehen statt einer leeren Überschrift.
         if (!eintraege.length) {
             return interaction.reply('Es hat noch niemand einen Geburtstag hinterlegt. Mit `/geburtstag setzen` fängst du an.');
         }
@@ -218,9 +236,8 @@ class GeburtstagHandler {
 
             const alle = await geburtstagService.getAlle();
             const guild = client.guilds.cache.get(config.GUILD_ID);
-            const heutige = Object.entries(alle)
-                .filter(([userId, geburtstag]) =>
-                    istHeuteGeburtstag(geburtstag, jetzt) && guild?.members.cache.has(userId));
+            const heutige = sammleEintraege(alle, (userId) => !!guild?.members.cache.has(userId))
+                .filter(([, geburtstag]) => istHeuteGeburtstag(geburtstag, jetzt));
 
             // Niemand hat heute Geburtstag: Tag abhaken, damit die Prüfung nicht jede Minute erneut
             // durch alle Einträge läuft. Der Kanal wird dafür bewusst nicht gebraucht.

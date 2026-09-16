@@ -19,11 +19,12 @@ const channelsFetch = vi.hoisted(() => vi.fn());
 const mitglieder = vi.hoisted(() => new Set<string>());
 const guilds = vi.hoisted(() => new Map<string, unknown>());
 vi.mock('../client.js', () => ({
-    default: {channels: {fetch: channelsFetch}, guilds: {cache: guilds}}
+    default: {user: {id: 'bot-1'}, channels: {fetch: channelsFetch}, guilds: {cache: guilds}}
 }));
 
 import geburtstagHandler, {
     berechneAlter,
+    BOT_GEBURTSTAG,
     formatDatum,
     GEBURTSTAG_HILFE,
     GRATULATIONS_STUNDE,
@@ -269,13 +270,16 @@ describe('GeburtstagHandler', () => {
             expect(interaction.reply.mock.calls[0][0].content).not.toContain('<@weg>');
         });
 
-        it('meldet eine leere Liste als Text', async () => {
+        // Der Bot hat selbst Geburtstag (erster Commit) - fest verdrahtet, steht in keinem Hash.
+        it('fuehrt den Bot selbst mit auf, auch ohne hinterlegte Eintraege', async () => {
             svc.getAlle.mockResolvedValue({});
             const interaction = mockInteraction();
 
             await geburtstagHandler.handleListe(interaction);
 
-            expect(typeof interaction.reply.mock.calls[0][0]).toBe('string');
+            const reply = interaction.reply.mock.calls[0][0];
+            expect(reply.content).toContain('<@bot-1>');
+            expect(reply.content).toContain('11. Juni 2026');
         });
     });
 
@@ -372,6 +376,23 @@ describe('GeburtstagHandler', () => {
             await geburtstagHandler.posteGeburtstagsgruesse();
 
             expect(send).not.toHaveBeenCalled();
+        });
+
+        it('gratuliert am 11. Juni dem Bot selbst', async () => {
+            // 11.06.2026 ist der erste Commit - 2036 wird der Bot also zehn.
+            setzeZeit(2036, 6, 11, GRATULATIONS_STUNDE);
+            svc.getAlle.mockResolvedValue({});
+
+            await geburtstagHandler.posteGeburtstagsgruesse();
+
+            expect(send).toHaveBeenCalledTimes(1);
+            expect(send.mock.calls[0][0].content).toContain('<@bot-1>');
+            expect(send.mock.calls[0][0].content).toContain('10');
+            expect(send.mock.calls[0][0].allowedMentions).toEqual({users: ['bot-1']});
+        });
+
+        it('haelt den Bot-Geburtstag auf dem Datum des ersten Commits fest', () => {
+            expect(BOT_GEBURTSTAG).toEqual({tag: 11, monat: 6, jahr: 2026});
         });
 
         it('lässt einen Redis-Fehler nicht durchschlagen', async () => {
