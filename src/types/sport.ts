@@ -3,6 +3,7 @@ export interface SportEntry {
     userId: string;
     activity: string;
     kilometers: number;
+    minutes?: number;
     createdAt: string;
 }
 

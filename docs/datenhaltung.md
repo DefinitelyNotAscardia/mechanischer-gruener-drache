@@ -30,6 +30,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `TWITCH:NOTIFICATION_CHANNEL`, `TWITCH:NOTIFICATION_ROLE` | Admin-Konfiguration | bis zum Überschreiben | Live-Benachrichtigungen |
 | `SPORT:ENTRY:<id>`, `SPORT:USER:<userId>` | Sport-Einträge: Distanz, Aktivität, Datum, optionale Notiz | dauerhaft (bis `/sport loeschen`) | `/sport statistik` |
 | `SPORT:HIGHSCORE`, `SPORT:MILESTONES`, `SPORT:ANNOUNCEMENT_CHANNEL` | Kilometer je User, Meilensteine, Ankündigungskanal | dauerhaft | `/sport gesamt`, Meilenstein-Ankündigungen |
+| `SPORT:MINUTEN` | Aktivitätsminuten je User | dauerhaft | `/sport` |
 | `SPORT:LAST_DAILY_POST` | Tag (YYYY-MM-DD) des zuletzt geposteten täglichen Kilometerstands | bis zum Überschreiben | Doppelpost-Schutz der Mitternachts-Meldung |
 | `<userId>PING_PONG`, `PING_PONG` (Sorted Set) | Ping-Pong-Punktestand der laufenden Season | bis zum Monatsende (Season-Reset) | `/pingpong bestenliste` |
 | `PING_PONG:LAST_SEASON` | Monat (YYYY-MM) der zuletzt abgerechneten Season | bis zum Überschreiben | Doppelabrechnungs-Schutz am Monatswechsel |
